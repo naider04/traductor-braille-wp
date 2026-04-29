@@ -6,7 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toBrailleString, textToBrailleCodes, textToBrailleCells, getBrailleLineLength, getUnsupportedCharacters, BrailleCellData } from './lib/braille';
-import { Type, Info, Trash2, ArrowRight, Printer, Copy, Check, LayoutGrid, Type as TypeIcon, AlertCircle, Sparkles, ArrowUp } from 'lucide-react';
+import { Type, Info, Trash2, ArrowRight, Printer, Copy, Check, LayoutGrid, Type as TypeIcon, AlertCircle, Sparkles, ArrowUp, Loader2, SquareSlash } from 'lucide-react';
 
 type DisplayMode = 'grid' | 'unicode';
 
@@ -46,8 +46,21 @@ export default function App() {
   const [copiedType, setCopiedType] = useState<'normal' | 'mirrored' | null>(null);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
   const [cursorPos, setCursorPos] = useState(0);
-  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [status, setStatus] = useState<'idle' | 'success' | 'error' | 'loading'>('idle');
   const [unsupportedChars, setUnsupportedChars] = useState<string[]>([]);
+  const [plasticSlateEnabled, setPlasticSlateEnabled] = useState(true);
+  const [isTranslating, setIsTranslating] = useState(false);
+
+  // Effect to simulate "charging" or processing when typing
+  React.useEffect(() => {
+    if (input) {
+      setIsTranslating(true);
+      const timer = setTimeout(() => {
+        setIsTranslating(false);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [input]);
 
   const normalCells = useMemo(() => textToBrailleCells(input, false), [input]);
   const mirroredCells = useMemo(() => textToBrailleCells(input, true), [input]);
@@ -57,19 +70,57 @@ export default function App() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
+    const oldVal = input;
+    const selection = e.target.selectionStart;
+
+    // Plastic Slate Logic
+    if (plasticSlateEnabled && newValue.length > oldVal.length) {
+      const charAdded = newValue[selection - 1];
+      
+      // Don't limit if deleting or adding newline
+      if (charAdded !== '\n') {
+        const linesBeforeCursor = newValue.substring(0, selection).split('\n');
+        const currentLineText = linesBeforeCursor[linesBeforeCursor.length - 1];
+        const lineLen = getBrailleLineLength(currentLineText);
+
+        if (lineLen > 28) {
+          // If the last character added made it exceed 28, insert newline before it
+          // Or if it reached exactly 28, the next character should be on a new line
+          const head = newValue.substring(0, selection - 1);
+          const tail = newValue.substring(selection);
+          setInput(head + '\n' + charAdded + tail);
+          
+          // Move cursor after the newly added character on the new line
+          setTimeout(() => {
+            const textarea = document.getElementById('text-input') as HTMLTextAreaElement;
+            if (textarea) {
+              textarea.focus();
+              textarea.setSelectionRange(selection + 1, selection + 1);
+            }
+          }, 0);
+          return;
+        }
+      }
+    }
+
     setInput(newValue);
-    setStatus('idle'); // Reset status on change
-    setCursorPos(e.target.selectionStart);
+    setStatus('idle');
+    setCursorPos(selection);
   };
 
   const handleTranslate = () => {
-    const chars = getUnsupportedCharacters(input);
-    setUnsupportedChars(chars);
-    if (chars.length === 0) {
-      setStatus('success');
-    } else {
-      setStatus('error');
-    }
+    setStatus('loading');
+    
+    // Simulate real work/charging
+    setTimeout(() => {
+      const chars = getUnsupportedCharacters(input);
+      setUnsupportedChars(chars);
+      if (chars.length === 0) {
+        setStatus('success');
+      } else {
+        setStatus('error');
+      }
+    }, 1200);
   };
 
   const handleCursorUpdate = (e: React.MouseEvent | React.KeyboardEvent) => {
@@ -86,8 +137,8 @@ export default function App() {
   }, [input, cursorPos]);
 
   const isCurrentLineFull = useMemo(() => {
-    return currentLineLength >= 28;
-  }, [currentLineLength]);
+    return plasticSlateEnabled && currentLineLength >= 28;
+  }, [currentLineLength, plasticSlateEnabled]);
 
   const copyToClipboard = async (text: string, type: 'normal' | 'mirrored') => {
     try {
@@ -152,7 +203,9 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <label htmlFor="text-input" className="text-[11px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
                   Source Text
-                  <span className="text-[10px] lowercase font-medium text-gray-300">(Limit: 28 Cells)</span>
+                  <span className={`text-[10px] lowercase font-medium ${plasticSlateEnabled ? 'text-blue-500' : 'text-gray-300'}`}>
+                    ({plasticSlateEnabled ? 'Limit: 28 Cells/Line' : 'Unlimited Mode'})
+                  </span>
                 </label>
                 <button 
                   onClick={() => setInput('')}
@@ -187,8 +240,8 @@ export default function App() {
                     )}
                   </AnimatePresence>
                   <div className="flex items-center gap-2 px-2 py-1 bg-white/80 rounded-md border border-gray-100 text-[10px] font-bold text-gray-400">
-                    <span className={currentLineLength >= 28 ? 'text-red-500' : ''}>
-                      {currentLineLength} / 28 CELLS
+                    <span className={isCurrentLineFull ? 'text-red-500' : ''}>
+                      {currentLineLength} {plasticSlateEnabled ? '/ 28 CELLS' : 'CELLS'}
                     </span>
                   </div>
                 </div>
@@ -197,10 +250,17 @@ export default function App() {
               <div className="flex flex-wrap items-center gap-4">
                 <button
                   onClick={handleTranslate}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-100 group"
+                  disabled={status === 'loading'}
+                  className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-100 group ${
+                    status === 'loading' ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
                 >
-                  <Sparkles size={16} className="group-hover:rotate-12 transition-transform" />
-                  TRANSLATE
+                  {(status === 'loading' || isTranslating) ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Sparkles size={16} className="group-hover:rotate-12 transition-transform" />
+                  )}
+                  {(status === 'loading' || isTranslating) ? 'CHARGING...' : 'TRANSLATE'}
                 </button>
 
                 <AnimatePresence>
@@ -232,11 +292,42 @@ export default function App() {
 
             {/* Sidebar-style Controls */}
             <div className="space-y-6">
-              <section className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex items-start gap-3">
-                <AlertCircle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                <p className="text-[10px] text-amber-700 font-medium leading-relaxed">
-                  Hispanic Braille Grade 1. Spaces are represented by empty tactile cells.
-                </p>
+              <button
+                onClick={() => setPlasticSlateEnabled(!plasticSlateEnabled)}
+                className={`flex items-center gap-2 p-2 rounded-lg border transition-all ${
+                  plasticSlateEnabled 
+                    ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm' 
+                    : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'
+                }`}
+              >
+                <div className={`p-1.5 rounded-md ${plasticSlateEnabled ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>
+                  <SquareSlash size={14} />
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <div className="text-[9px] font-bold uppercase tracking-wider leading-none">Plastic Slate</div>
+                  <div className="text-[8px] font-medium opacity-60 leading-none mt-1">
+                    {plasticSlateEnabled ? '28 cap' : 'Limit off'}
+                  </div>
+                </div>
+                <div className={`w-8 h-4 rounded-full relative transition-colors ${plasticSlateEnabled ? 'bg-blue-600' : 'bg-gray-200'}`}>
+                  <motion.div 
+                    animate={{ x: plasticSlateEnabled ? 16 : 2 }}
+                    className="absolute top-0.5 left-0 w-3 h-3 bg-white rounded-full"
+                  />
+                </div>
+              </button>
+
+              <section className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex flex-col gap-2">
+                <div className="flex items-start gap-3">
+                  <AlertCircle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-[10px] text-amber-700 font-medium leading-relaxed">
+                    Hispanic Braille Grade 1. Spaces are represented by empty tactile cells.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] font-bold text-amber-600 uppercase tracking-tight pl-7 border-t border-amber-100/50 pt-2">
+                  <ArrowUp size={14} />
+                  <span>Símbolo de mayúscula activo</span>
+                </div>
               </section>
             </div>
           </div>
@@ -262,14 +353,46 @@ export default function App() {
                 </button>
               </header>
               
-              <AnimatePresence mode="wait">
-                <motion.div 
-                  key={displayMode + input}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-200"
-                >
+              <div className="relative">
+                <AnimatePresence mode="wait">
+                  {(status === 'loading' || isTranslating) ? (
+                    <motion.div
+                      key="standard-overlay"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center gap-3"
+                    >
+                      <div className="flex gap-1.5">
+                        <motion.div 
+                          animate={{ scale: [1, 1.2, 1] }} 
+                          transition={{ repeat: Infinity, duration: 1 }}
+                          className="w-3 h-3 bg-blue-600 rounded-full" 
+                        />
+                        <motion.div 
+                          animate={{ scale: [1, 1.2, 1] }} 
+                          transition={{ repeat: Infinity, duration: 1, delay: 0.2 }}
+                          className="w-3 h-3 bg-blue-600 rounded-full" 
+                        />
+                        <motion.div 
+                          animate={{ scale: [1, 1.2, 1] }} 
+                          transition={{ repeat: Infinity, duration: 1, delay: 0.4 }}
+                          className="w-3 h-3 bg-blue-600 rounded-full" 
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-blue-600 tracking-widest uppercase">Syncing Tactile Data...</span>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+
+                <AnimatePresence mode="wait">
+                  <motion.div 
+                    key={displayMode + input}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-200"
+                  >
                   {displayMode === 'unicode' ? (
                     <div className="space-y-4 min-w-max">
                       {normalBraille ? (
@@ -313,7 +436,8 @@ export default function App() {
                   )}
                 </motion.div>
               </AnimatePresence>
-            </motion.div>
+            </div>
+          </motion.div>
 
             {/* Mirrored Display */}
             <motion.div 
@@ -323,7 +447,7 @@ export default function App() {
               <header className="flex justify-between items-center mb-6">
                 <div>
                   <h2 className="text-sm font-bold text-red-500 tracking-widest uppercase">Mirror Mode (Slate)</h2>
-                  <p className="text-[10px] text-gray-400 font-medium tracking-tight">Reversed Order & Flipped Columns for Back-punching</p>
+                  <p className="text-[10px] text-gray-400 font-medium tracking-tight">Phrases Left-to-Right • Flipped Columns for Back-punching</p>
                 </div>
                 <button 
                   onClick={() => copyToClipboard(mirroredBraille, 'mirrored')}
@@ -334,34 +458,65 @@ export default function App() {
                 </button>
               </header>
 
-              <AnimatePresence mode="wait">
-                <motion.div 
-                   key={displayMode + input + '-mirrored'}
-                   initial={{ opacity: 0 }}
-                   animate={{ opacity: 1 }}
-                   exit={{ opacity: 0 }}
-                   className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-200"
-                   style={{ direction: 'rtl' }}
-                >
+              <div className="relative">
+                <AnimatePresence mode="wait">
+                  {(status === 'loading' || isTranslating) ? (
+                    <motion.div
+                      key="mirrored-overlay"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 bg-white/60 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center gap-3"
+                    >
+                      <div className="flex gap-1.5">
+                        <motion.div 
+                          animate={{ scale: [1, 1.2, 1] }} 
+                          transition={{ repeat: Infinity, duration: 1 }}
+                          className="w-3 h-3 bg-red-500 rounded-full" 
+                        />
+                        <motion.div 
+                          animate={{ scale: [1, 1.2, 1] }} 
+                          transition={{ repeat: Infinity, duration: 1, delay: 0.2 }}
+                          className="w-3 h-3 bg-red-500 rounded-full" 
+                        />
+                        <motion.div 
+                          animate={{ scale: [1, 1.2, 1] }} 
+                          transition={{ repeat: Infinity, duration: 1, delay: 0.4 }}
+                          className="w-3 h-3 bg-red-500 rounded-full" 
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold text-red-500 tracking-widest uppercase">Flipping Cells...</span>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+
+                <AnimatePresence mode="wait">
+                  <motion.div 
+                    key={displayMode + input + '-mirrored'}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-200"
+                  >
                   {displayMode === 'unicode' ? (
-                    <div className="space-y-4 min-w-max" style={{ direction: 'ltr' }}>
+                    <div className="space-y-4 min-w-max text-right">
                       {mirroredBraille ? (
                         mirroredBraille.split('\n').map((line, idx) => (
                           <div key={idx} className="space-y-1">
-                            <div className="text-[9px] font-bold text-gray-300 tracking-tight text-right">
+                            <div className="text-[9px] font-bold text-gray-300 tracking-tight">
                               {input.split('\n')[idx] || '\u00A0'}
                             </div>
-                            <div className="braille-display whitespace-nowrap text-right">
+                            <div className="braille-display whitespace-nowrap">
                               {line}
                             </div>
                           </div>
                         ))
                       ) : (
-                        <span className="opacity-10 italic text-sm font-sans tracking-normal block text-right">Type to begin...</span>
+                        <span className="opacity-10 italic text-sm font-sans tracking-normal block">Type to begin...</span>
                       )}
                     </div>
                   ) : (
-                    <div className="space-y-6 min-w-max" style={{ direction: 'ltr' }}>
+                    <div className="space-y-6 min-w-max">
                       {mirroredCells.map((line: BrailleCellData[], lIdx: number) => (
                         <div key={lIdx} className="space-y-2">
                           <div className="flex flex-nowrap gap-1.5 items-end justify-end">
@@ -385,12 +540,9 @@ export default function App() {
                     </div>
                   )}
                 </motion.div>
-                <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                  <ArrowUp size={14} className="text-red-500" />
-                  <span>Este símbolo indica mayúscula</span>
-                </div>
               </AnimatePresence>
-            </motion.div>
+            </div>
+          </motion.div>
           </div>
 
           {/* Metrics Footer */}
@@ -398,7 +550,7 @@ export default function App() {
             <div className="flex gap-8 text-[11px] text-gray-400 font-bold uppercase tracking-wider">
               <div>CHARS: <span className="text-gray-900">{input.length}</span></div>
               <div>LINES: <span className="text-gray-900">{input.split('\n').length}</span></div>
-              <div>SLATE CAP: <span className="text-gray-900">28/LINE</span></div>
+              <div>SLATE CAP: <span className="text-gray-900">{plasticSlateEnabled ? '28/LINE' : 'UNLIMITED'}</span></div>
             </div>
           </footer>
         </div>
