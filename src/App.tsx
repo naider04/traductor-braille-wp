@@ -57,15 +57,8 @@ export default function App() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
-    const lines = newValue.split('\n');
-    
-    // Check if any line exceeds 28 Braille characters
-    const isValid = lines.every(line => getBrailleLineLength(line) <= 28);
-    
-    if (isValid) {
-      setInput(newValue);
-      setStatus('idle'); // Reset status on change
-    }
+    setInput(newValue);
+    setStatus('idle'); // Reset status on change
     setCursorPos(e.target.selectionStart);
   };
 

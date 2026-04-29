@@ -38,9 +38,10 @@ export const BRAILLE_ALPHABET: Record<string, number> = {
   'í': 0x04 | 0x08, // 3-4
   'ó': 0x04 | 0x08 | 0x20, // 3-4-6
   'ú': 0x02 | 0x04 | 0x08 | 0x10 | 0x20, // 2-3-4-5-6
+  'ü': 0x01 | 0x02 | 0x10 | 0x20, // 1-2-5-6
   'ñ': 0x01 | 0x02 | 0x08 | 0x10 | 0x20, // 1-2-4-5-6
   ';': SEMICOLON_DOTS,
-  '.': 0x02 | 0x10 | 0x20, // 2-5-6
+  '.': 0x04, // 3
   ',': 0x02, // 2
   ':': 0x02 | 0x10, // 2-5
   '!': 0x02 | 0x04 | 0x10, // 2-3-5
@@ -90,10 +91,8 @@ export function charToBraille(char: string): number[] {
 export function textToBrailleCodes(text: string, mirrored = false): number[][] {
   const lines = text.split('\n');
   return lines.map(line => {
-    // Ignore spaces at the end of each line
-    const trimmedLine = line.replace(/\s+$/, '');
     let lineCodes: number[] = [];
-    for (const char of trimmedLine) {
+    for (const char of line) {
       lineCodes.push(...charToBraille(char));
     }
 
@@ -116,10 +115,8 @@ export function toBrailleString(text: string, mirrored = false, spaceSymbol = '�
 }
 
 export function getBrailleLineLength(textLine: string): number {
-  // Ignore spaces at the end of each line
-  const trimmed = textLine.replace(/\s+$/, '');
   let count = 0;
-  for (const char of trimmed) {
+  for (const char of textLine) {
     count += charToBraille(char).length;
   }
   return count;
@@ -129,8 +126,7 @@ export function getUnsupportedCharacters(text: string): string[] {
   const unsupported = new Set<string>();
   const lines = text.split('\n');
   for (const line of lines) {
-    const trimmed = line.replace(/\s+$/, '');
-    for (const char of trimmed) {
+    for (const char of line) {
       const lower = char.toLowerCase();
       // Check if character is NOT in alphabet and NOT a space
       if (!BRAILLE_ALPHABET[lower] && char !== ' ') {
