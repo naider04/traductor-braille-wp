@@ -42,7 +42,7 @@ const BrailleCell: React.FC<BrailleCellProps> = ({ code }) => {
 };
 
 export default function App() {
-  const [input, setInput] = useState('Braille algo\n WP Translator?');
+  const [input, setInput] = useState('Braille\nWP Translator');
   const [copiedType, setCopiedType] = useState<'normal' | 'mirrored' | null>(null);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
   const [cursorPos, setCursorPos] = useState(0);
