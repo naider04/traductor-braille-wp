@@ -271,7 +271,7 @@ export default function App() {
                   className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-200"
                 >
                   {displayMode === 'unicode' ? (
-                    <div className="space-y-4">
+                    <div className="space-y-4 min-w-max">
                       {normalBraille ? (
                         normalBraille.split('\n').map((line, idx) => (
                           <div key={idx} className="space-y-1">
@@ -288,7 +288,7 @@ export default function App() {
                       )}
                     </div>
                   ) : (
-                    <div className="space-y-6">
+                    <div className="space-y-6 min-w-max">
                       {normalCodes.map((line: number[], lIdx: number) => (
                         <div key={lIdx} className="space-y-2">
                           <div className="text-[9px] font-bold text-gray-400 opacity-60 tracking-tight">
@@ -332,13 +332,14 @@ export default function App() {
                    initial={{ opacity: 0 }}
                    animate={{ opacity: 1 }}
                    exit={{ opacity: 0 }}
+                   dir="rtl"
                    className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-200"
                 >
                   {displayMode === 'unicode' ? (
-                    <div className="space-y-4 flex flex-col items-end">
+                    <div className="space-y-4 min-w-max">
                       {mirroredBraille ? (
                         mirroredBraille.split('\n').map((line, idx) => (
-                          <div key={idx} className="space-y-1 flex flex-col items-end">
+                          <div key={idx} className="space-y-1">
                             <div className="text-[9px] font-bold text-gray-300 tracking-tight">
                               {input.split('\n')[idx] || '\u00A0'}
                             </div>
@@ -348,17 +349,17 @@ export default function App() {
                           </div>
                         ))
                       ) : (
-                        <span className="opacity-10 italic text-sm font-sans tracking-normal text-right">Type to begin...</span>
+                        <span className="opacity-10 italic text-sm font-sans tracking-normal">Type to begin...</span>
                       )}
                     </div>
                   ) : (
-                    <div className="space-y-6 flex flex-col items-end min-w-full">
+                    <div className="space-y-6 min-w-max">
                       {mirroredCodes.map((line: number[], lIdx: number) => (
-                        <div key={lIdx} className="space-y-2 flex flex-col items-end">
+                        <div key={lIdx} className="space-y-2">
                           <div className="text-[9px] font-bold text-gray-400 opacity-60 tracking-tight">
                             {input.split('\n')[lIdx] || '\u00A0'}
                           </div>
-                          <div className="flex flex-nowrap gap-1.5 items-start justify-end">
+                          <div className="flex flex-nowrap gap-1.5 items-start">
                             {line.map((code: number, cIdx: number) => (
                               <BrailleCell key={`${lIdx}-${cIdx}-mirrored`} code={code} />
                             ))}
