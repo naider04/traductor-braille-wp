@@ -4,6 +4,7 @@
  */
 
 export const UPPERCASE_INDICATOR = 0x08 | 0x20; // Dots 4, 6 (⠨)
+export const NUMBER_INDICATOR = 0x04 | 0x08 | 0x10 | 0x20; // Dots 3, 4, 5, 6 (⠼)
 export const SEMICOLON_DOTS = 0x02 | 0x04; // Dots 2, 3 (⠆)
 
 export const BRAILLE_ALPHABET: Record<string, number> = {
@@ -45,10 +46,19 @@ export const BRAILLE_ALPHABET: Record<string, number> = {
   ',': 0x02, // 2
   ':': 0x02 | 0x10, // 2-5
   '!': 0x02 | 0x04 | 0x10, // 2-3-5
+  '¡': 0x02 | 0x04 | 0x10, // 2-3-5
   '?': 0x02 | 0x20, // 2-6
+  '¿': 0x02 | 0x20, // 2-6
+  '"': 0x02 | 0x04 | 0x20, // 2-3-6
   '-': 0x04 | 0x20, // 3-6
   '(': 0x02 | 0x04 | 0x10 | 0x20, // 2-3-5-6
   ')': 0x02 | 0x04 | 0x10 | 0x20, // 2-3-5-6
+};
+
+// Mapping for digits to their corresponding letter-dots
+export const DIGIT_TO_LETTER: Record<string, string> = {
+  '1': 'a', '2': 'b', '3': 'c', '4': 'd', '5': 'e',
+  '6': 'f', '7': 'g', '8': 'h', '9': 'i', '0': 'j'
 };
 
 export interface BrailleCellData {
@@ -79,6 +89,12 @@ export function charToBraille(char: string): number[] {
   const lower = char.toLowerCase();
   const codes: number[] = [];
 
+  if (/[0-9]/.test(char)) {
+    codes.push(NUMBER_INDICATOR);
+    codes.push(BRAILLE_ALPHABET[DIGIT_TO_LETTER[char]]);
+    return codes;
+  }
+
   if (char !== lower && /[a-záéíóúñ]/.test(lower)) {
     codes.push(UPPERCASE_INDICATOR);
   }
@@ -96,7 +112,30 @@ export function textToBrailleCells(text: string, mirrored = false): BrailleCellD
   const lines = text.split('\n');
   return lines.map(line => {
     let lineCells: BrailleCellData[] = [];
+    let inNumberMode = false;
+
     for (const char of line) {
+      // Number logic
+      if (/[0-9]/.test(char)) {
+        if (!inNumberMode) {
+          lineCells.push({
+            code: NUMBER_INDICATOR,
+            char: '#',
+            isIndicator: true
+          });
+          inNumberMode = true;
+        }
+        lineCells.push({
+          code: BRAILLE_ALPHABET[DIGIT_TO_LETTER[char]],
+          char: char,
+          isIndicator: false
+        });
+        continue;
+      }
+
+      // Reset number mode for anything else
+      inNumberMode = false;
+
       const lower = char.toLowerCase();
       const isUpper = char !== lower && /[a-záéíóúñ]/.test(lower);
       
@@ -151,11 +190,8 @@ export function toBrailleString(text: string, mirrored = false, spaceSymbol = '�
 }
 
 export function getBrailleLineLength(textLine: string): number {
-  let count = 0;
-  for (const char of textLine) {
-    count += charToBraille(char).length;
-  }
-  return count;
+  const lineCells = textToBrailleCells(textLine, false)[0] || [];
+  return lineCells.length;
 }
 
 export function getUnsupportedCharacters(text: string): string[] {
@@ -164,8 +200,8 @@ export function getUnsupportedCharacters(text: string): string[] {
   for (const line of lines) {
     for (const char of line) {
       const lower = char.toLowerCase();
-      // Check if character is NOT in alphabet and NOT a space
-      if (!BRAILLE_ALPHABET[lower] && char !== ' ') {
+      // Check if character is NOT in alphabet, NOT a digit, and NOT a space
+      if (!BRAILLE_ALPHABET[lower] && !/[0-9]/.test(char) && char !== ' ') {
         unsupported.add(char);
       }
     }

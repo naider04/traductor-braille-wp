@@ -6,7 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { toBrailleString, textToBrailleCodes, textToBrailleCells, getBrailleLineLength, getUnsupportedCharacters, BrailleCellData } from './lib/braille';
-import { Type, Info, Trash2, ArrowRight, Printer, Copy, Check, LayoutGrid, Type as TypeIcon, AlertCircle, Sparkles, ArrowUp, Loader2, SquareSlash } from 'lucide-react';
+import { Type, Info, Trash2, ArrowRight, Printer, Copy, Check, LayoutGrid, Type as TypeIcon, AlertCircle, Sparkles, ArrowUp, Loader2, SquareSlash, Terminal } from 'lucide-react';
 
 type DisplayMode = 'grid' | 'unicode';
 
@@ -47,9 +47,10 @@ export default function App() {
   const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
   const [cursorPos, setCursorPos] = useState(0);
   const [status, setStatus] = useState<'idle' | 'success' | 'error' | 'loading'>('idle');
-  const [unsupportedChars, setUnsupportedChars] = useState<string[]>([]);
   const [plasticSlateEnabled, setPlasticSlateEnabled] = useState(true);
   const [isTranslating, setIsTranslating] = useState(false);
+  const [isLogOpen, setIsLogOpen] = useState(false);
+  const unsupportedChars = useMemo(() => getUnsupportedCharacters(input), [input]);
 
   // Effect to simulate "charging" or processing when typing
   React.useEffect(() => {
@@ -105,27 +106,12 @@ export default function App() {
 
     setInput(newValue);
     setStatus('idle');
-    setCursorPos(selection);
-  };
-
-  const handleTranslate = () => {
-    setStatus('loading');
-    
-    // Simulate real work/charging
-    setTimeout(() => {
-      const chars = getUnsupportedCharacters(input);
-      setUnsupportedChars(chars);
-      if (chars.length === 0) {
-        setStatus('success');
-      } else {
-        setStatus('error');
-      }
-    }, 1200);
+    setCursorPos(selection || 0);
   };
 
   const handleCursorUpdate = (e: React.MouseEvent | React.KeyboardEvent) => {
     const target = e.target as HTMLTextAreaElement;
-    setCursorPos(target.selectionStart);
+    setCursorPos(target.selectionStart || 0);
   };
 
   const currentLineLength = useMemo(() => {
@@ -247,46 +233,69 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="flex flex-wrap items-center gap-4">
-                <button
-                  onClick={handleTranslate}
-                  disabled={status === 'loading'}
-                  className={`flex items-center gap-2 px-6 py-3 rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-100 group ${
-                    status === 'loading' ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white'
-                  }`}
-                >
-                  {(status === 'loading' || isTranslating) ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Sparkles size={16} className="group-hover:rotate-12 transition-transform" />
-                  )}
-                  {(status === 'loading' || isTranslating) ? 'CHARGING...' : 'TRANSLATE'}
-                </button>
+              <div className="space-y-4">
+                <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
+                  <button 
+                    onClick={() => setIsLogOpen(!isLogOpen)}
+                    className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors border-b border-gray-100"
+                  >
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                      <Terminal size={14} />
+                      Log de Procesamiento
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[10px] font-medium text-gray-400">{input.length} chars</span>
+                      <motion.div animate={{ rotate: isLogOpen ? 180 : 0 }}>
+                        <ArrowUp size={14} className="text-gray-400 rotate-180" />
+                      </motion.div>
+                    </div>
+                  </button>
+                  
+                  <AnimatePresence>
+                    {isLogOpen && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="p-4 bg-gray-50/30 font-mono text-[11px] leading-relaxed max-h-48 overflow-y-auto custom-scrollbar">
+                          {input.split('').map((char, idx) => {
+                            const isUnsupported = unsupportedChars.includes(char);
+                            const isSpace = char === ' ';
+                            const isNewline = char === '\n';
+                            const brailleChar = !isUnsupported ? toBrailleString(char, false, ' ') : '';
+                            
+                            return (
+                              <div key={idx} className="flex gap-4 border-b border-gray-100/50 py-1 last:border-0 text-gray-600">
+                                <span className="text-gray-300 w-4 text-right select-none">{idx + 1}</span>
+                                <span className="font-bold w-4 text-gray-800">
+                                  {isNewline ? '↵' : isSpace ? ' ' : char}
+                                </span>
+                                <span className="w-12 text-gray-400">
+                                  {isUnsupported ? '[ERROR]' : '[OK]'}
+                                </span>
+                                <span className="flex-1 truncate">
+                                  {isUnsupported ? `Símbolo '${char}' omitido` : `${brailleChar} • ${isNewline ? 'Salto de línea' : isSpace ? 'Espacio' : `Traducido: ${char}`}`}
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {input.length === 0 && (
+                            <div className="text-gray-400 italic py-2">Sin datos de entrada...</div>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
-                <AnimatePresence>
-                  {status === 'success' && (
-                    <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -10 }}
-                      className="flex items-center gap-2 text-[11px] font-bold text-green-600 px-4 py-2 bg-green-50 border border-green-100 rounded-xl"
-                    >
-                      <Check size={14} />
-                      CONTENT VERIFIED: EVERYTHING TRANSLATED
-                    </motion.div>
-                  )}
-                  {status === 'error' && (
-                    <motion.div
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -10 }}
-                      className="flex items-center gap-2 text-[11px] font-bold text-amber-600 px-4 py-2 bg-amber-50 border border-amber-100 rounded-xl"
-                    >
+                  {unsupportedChars.length > 0 && (
+                    <div className="px-4 py-3 bg-gray-50 border-t border-gray-100 flex items-center gap-2 text-[10px] font-bold text-gray-600">
                       <AlertCircle size={14} />
-                      UNSUPPORTED: {unsupportedChars.map(c => `'${c}'`).join(', ')}
-                    </motion.div>
+                      AVISO: {unsupportedChars.length} símbolos no traducibles: {unsupportedChars.map(c => `'${c}'`).join(', ')}
+                    </div>
                   )}
-                </AnimatePresence>
+                </div>
               </div>
             </section>
 
@@ -317,16 +326,22 @@ export default function App() {
                 </div>
               </button>
 
-              <section className="bg-amber-50 p-4 rounded-xl border border-amber-100 flex flex-col gap-2">
+              <section className="bg-amber-50 p-4 rounded-xl border border-amber-100 space-y-3">
                 <div className="flex items-start gap-3">
-                  <AlertCircle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                  <Info size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
                   <p className="text-[10px] text-amber-700 font-medium leading-relaxed">
-                    Hispanic Braille Grade 1. Spaces are represented by empty tactile cells.
+                    Los espacios se representan mediante celdas táctiles vacías.
                   </p>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] font-bold text-amber-600 uppercase tracking-tight pl-7 border-t border-amber-100/50 pt-2">
-                  <ArrowUp size={14} />
+                
+                <div className="flex items-center gap-3 text-[10px] font-bold text-amber-600 uppercase tracking-tight pl-7 border-t border-amber-100/50 pt-2">
+                  <ArrowUp size={14} className="text-red-600" />
                   <span>Símbolo de mayúscula activo</span>
+                </div>
+
+                <div className="flex items-center gap-3 text-[10px] font-bold text-amber-600 uppercase tracking-tight pl-7 border-t border-amber-100/50 pt-2">
+                  <span className="text-red-600 text-sm w-3.5 text-center font-black">#</span>
+                  <span>Símbolo de número activo</span>
                 </div>
               </section>
             </div>
@@ -419,7 +434,11 @@ export default function App() {
                               <div key={`${lIdx}-${cIdx}`} className="flex flex-col items-center gap-1">
                                 <div className="h-4 flex items-center justify-center">
                                   {cell.isIndicator ? (
-                                    <ArrowUp size={12} className="text-red-500" />
+                                    cell.char === '#' ? (
+                                      <span className="text-red-500 font-bold text-xs">#</span>
+                                    ) : (
+                                      <ArrowUp size={12} className="text-red-500" />
+                                    )
                                   ) : (
                                     <span className="text-[10px] font-bold text-gray-400">
                                       {cell.code === -1 ? '\u00A0' : cell.char}
@@ -524,7 +543,11 @@ export default function App() {
                               <div key={`${lIdx}-${cIdx}-mirrored`} className="flex flex-col items-center gap-1">
                                 <div className="h-4 flex items-center justify-center">
                                   {cell.isIndicator ? (
-                                    <ArrowUp size={12} className="text-red-500" />
+                                    cell.char === '#' ? (
+                                      <span className="text-red-500 font-bold text-xs">#</span>
+                                    ) : (
+                                      <ArrowUp size={12} className="text-red-500" />
+                                    )
                                   ) : (
                                     <span className="text-[10px] font-bold text-gray-400">
                                       {cell.code === -1 ? '\u00A0' : cell.char}
