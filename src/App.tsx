@@ -5,8 +5,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { toBrailleString, textToBrailleCodes, getBrailleLineLength, getUnsupportedCharacters } from './lib/braille';
-import { Type, Info, Trash2, ArrowRight, Printer, Copy, Check, LayoutGrid, Type as TypeIcon, AlertCircle, Sparkles } from 'lucide-react';
+import { toBrailleString, textToBrailleCodes, textToBrailleCells, getBrailleLineLength, getUnsupportedCharacters, BrailleCellData } from './lib/braille';
+import { Type, Info, Trash2, ArrowRight, Printer, Copy, Check, LayoutGrid, Type as TypeIcon, AlertCircle, Sparkles, ArrowUp } from 'lucide-react';
 
 type DisplayMode = 'grid' | 'unicode';
 
@@ -49,8 +49,8 @@ export default function App() {
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [unsupportedChars, setUnsupportedChars] = useState<string[]>([]);
 
-  const normalCodes = useMemo(() => textToBrailleCodes(input, false), [input]);
-  const mirroredCodes = useMemo(() => textToBrailleCodes(input, true), [input]);
+  const normalCells = useMemo(() => textToBrailleCells(input, false), [input]);
+  const mirroredCells = useMemo(() => textToBrailleCells(input, true), [input]);
 
   const normalBraille = useMemo(() => toBrailleString(input, false, ' '), [input]);
   const mirroredBraille = useMemo(() => toBrailleString(input, true, ' '), [input]);
@@ -289,14 +289,22 @@ export default function App() {
                     </div>
                   ) : (
                     <div className="space-y-6 min-w-max">
-                      {normalCodes.map((line: number[], lIdx: number) => (
+                      {normalCells.map((line: BrailleCellData[], lIdx: number) => (
                         <div key={lIdx} className="space-y-2">
-                          <div className="text-[9px] font-bold text-gray-400 opacity-60 tracking-tight">
-                            {input.split('\n')[lIdx] || '\u00A0'}
-                          </div>
-                          <div className="flex flex-nowrap gap-1.5 items-start">
-                            {line.map((code: number, cIdx: number) => (
-                              <BrailleCell key={`${lIdx}-${cIdx}`} code={code} />
+                          <div className="flex flex-nowrap gap-1.5 items-end">
+                            {line.map((cell: BrailleCellData, cIdx: number) => (
+                              <div key={`${lIdx}-${cIdx}`} className="flex flex-col items-center gap-1">
+                                <div className="h-4 flex items-center justify-center">
+                                  {cell.isIndicator ? (
+                                    <ArrowUp size={12} className="text-red-500" />
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-gray-400">
+                                      {cell.code === -1 ? '\u00A0' : cell.char}
+                                    </span>
+                                  )}
+                                </div>
+                                <BrailleCell code={cell.code} />
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -332,15 +340,15 @@ export default function App() {
                    initial={{ opacity: 0 }}
                    animate={{ opacity: 1 }}
                    exit={{ opacity: 0 }}
-                   dir="rtl"
                    className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-gray-200"
+                   style={{ direction: 'rtl' }}
                 >
                   {displayMode === 'unicode' ? (
-                    <div className="space-y-4 min-w-max">
+                    <div className="space-y-4 min-w-max" style={{ direction: 'ltr' }}>
                       {mirroredBraille ? (
                         mirroredBraille.split('\n').map((line, idx) => (
                           <div key={idx} className="space-y-1">
-                            <div className="text-[9px] font-bold text-gray-300 tracking-tight">
+                            <div className="text-[9px] font-bold text-gray-300 tracking-tight text-right">
                               {input.split('\n')[idx] || '\u00A0'}
                             </div>
                             <div className="braille-display whitespace-nowrap text-right">
@@ -349,19 +357,27 @@ export default function App() {
                           </div>
                         ))
                       ) : (
-                        <span className="opacity-10 italic text-sm font-sans tracking-normal">Type to begin...</span>
+                        <span className="opacity-10 italic text-sm font-sans tracking-normal block text-right">Type to begin...</span>
                       )}
                     </div>
                   ) : (
-                    <div className="space-y-6 min-w-max">
-                      {mirroredCodes.map((line: number[], lIdx: number) => (
+                    <div className="space-y-6 min-w-max" style={{ direction: 'ltr' }}>
+                      {mirroredCells.map((line: BrailleCellData[], lIdx: number) => (
                         <div key={lIdx} className="space-y-2">
-                          <div className="text-[9px] font-bold text-gray-400 opacity-60 tracking-tight">
-                            {input.split('\n')[lIdx] || '\u00A0'}
-                          </div>
-                          <div className="flex flex-nowrap gap-1.5 items-start">
-                            {line.map((code: number, cIdx: number) => (
-                              <BrailleCell key={`${lIdx}-${cIdx}-mirrored`} code={code} />
+                          <div className="flex flex-nowrap gap-1.5 items-end justify-end">
+                            {line.map((cell: BrailleCellData, cIdx: number) => (
+                              <div key={`${lIdx}-${cIdx}-mirrored`} className="flex flex-col items-center gap-1">
+                                <div className="h-4 flex items-center justify-center">
+                                  {cell.isIndicator ? (
+                                    <ArrowUp size={12} className="text-red-500" />
+                                  ) : (
+                                    <span className="text-[10px] font-bold text-gray-400">
+                                      {cell.code === -1 ? '\u00A0' : cell.char}
+                                    </span>
+                                  )}
+                                </div>
+                                <BrailleCell code={cell.code} />
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -369,6 +385,10 @@ export default function App() {
                     </div>
                   )}
                 </motion.div>
+                <div className="mt-4 flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  <ArrowUp size={14} className="text-red-500" />
+                  <span>Este símbolo indica mayúscula</span>
+                </div>
               </AnimatePresence>
             </motion.div>
           </div>

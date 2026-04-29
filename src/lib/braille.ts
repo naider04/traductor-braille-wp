@@ -51,6 +51,12 @@ export const BRAILLE_ALPHABET: Record<string, number> = {
   ')': 0x02 | 0x04 | 0x10 | 0x20, // 2-3-5-6
 };
 
+export interface BrailleCellData {
+  code: number;
+  char: string;
+  isIndicator: boolean;
+}
+
 /**
  * Mirror a single Braille character's column dots.
  * 1 <-> 4
@@ -77,31 +83,61 @@ export function charToBraille(char: string): number[] {
     codes.push(UPPERCASE_INDICATOR);
   }
 
-  if (BRAILLE_ALPHABET[lower]) {
+  if (BRAILLE_ALPHABET[lower] !== undefined) {
     codes.push(BRAILLE_ALPHABET[lower]);
   } else if (char === ' ') {
     codes.push(-1); // Special marker for space
-  } else {
-    // Keep unknown
   }
 
   return codes;
 }
 
-export function textToBrailleCodes(text: string, mirrored = false): number[][] {
+export function textToBrailleCells(text: string, mirrored = false): BrailleCellData[][] {
   const lines = text.split('\n');
   return lines.map(line => {
-    let lineCodes: number[] = [];
+    let lineCells: BrailleCellData[] = [];
     for (const char of line) {
-      lineCodes.push(...charToBraille(char));
+      const lower = char.toLowerCase();
+      const isUpper = char !== lower && /[a-záéíóúñ]/.test(lower);
+      
+      if (isUpper) {
+        lineCells.push({
+          code: UPPERCASE_INDICATOR,
+          char: char,
+          isIndicator: true
+        });
+      }
+      
+      const dots = BRAILLE_ALPHABET[lower];
+      if (dots !== undefined) {
+        lineCells.push({
+          code: dots,
+          char: char,
+          isIndicator: false
+        });
+      } else if (char === ' ') {
+        lineCells.push({
+          code: -1,
+          char: ' ',
+          isIndicator: false
+        });
+      }
     }
 
     if (mirrored) {
-      lineCodes.reverse();
-      lineCodes = lineCodes.map(code => mirrorBrailleChar(code));
+      lineCells.reverse();
+      lineCells = lineCells.map(cell => ({
+        ...cell,
+        code: mirrorBrailleChar(cell.code)
+      }));
     }
-    return lineCodes;
+    return lineCells;
   });
+}
+
+export function textToBrailleCodes(text: string, mirrored = false): number[][] {
+  const linesCells = textToBrailleCells(text, mirrored);
+  return linesCells.map(line => line.map(cell => cell.code));
 }
 
 export function toBrailleString(text: string, mirrored = false, spaceSymbol = '█'): string {
