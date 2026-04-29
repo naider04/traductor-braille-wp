@@ -5,8 +5,8 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { toBrailleString, textToBrailleCodes, getBrailleLineLength } from './lib/braille';
-import { Type, Info, Trash2, ArrowRight, Printer, Copy, Check, LayoutGrid, Type as TypeIcon, AlertCircle } from 'lucide-react';
+import { toBrailleString, textToBrailleCodes, getBrailleLineLength, getUnsupportedCharacters } from './lib/braille';
+import { Type, Info, Trash2, ArrowRight, Printer, Copy, Check, LayoutGrid, Type as TypeIcon, AlertCircle, Sparkles } from 'lucide-react';
 
 type DisplayMode = 'grid' | 'unicode';
 
@@ -46,6 +46,8 @@ export default function App() {
   const [copiedType, setCopiedType] = useState<'normal' | 'mirrored' | null>(null);
   const [displayMode, setDisplayMode] = useState<DisplayMode>('grid');
   const [cursorPos, setCursorPos] = useState(0);
+  const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [unsupportedChars, setUnsupportedChars] = useState<string[]>([]);
 
   const normalCodes = useMemo(() => textToBrailleCodes(input, false), [input]);
   const mirroredCodes = useMemo(() => textToBrailleCodes(input, true), [input]);
@@ -62,8 +64,19 @@ export default function App() {
     
     if (isValid) {
       setInput(newValue);
+      setStatus('idle'); // Reset status on change
     }
     setCursorPos(e.target.selectionStart);
+  };
+
+  const handleTranslate = () => {
+    const chars = getUnsupportedCharacters(input);
+    setUnsupportedChars(chars);
+    if (chars.length === 0) {
+      setStatus('success');
+    } else {
+      setStatus('error');
+    }
   };
 
   const handleCursorUpdate = (e: React.MouseEvent | React.KeyboardEvent) => {
@@ -186,6 +199,41 @@ export default function App() {
                     </span>
                   </div>
                 </div>
+              </div>
+              
+              <div className="flex flex-wrap items-center gap-4">
+                <button
+                  onClick={handleTranslate}
+                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-lg shadow-blue-100 group"
+                >
+                  <Sparkles size={16} className="group-hover:rotate-12 transition-transform" />
+                  TRANSLATE
+                </button>
+
+                <AnimatePresence>
+                  {status === 'success' && (
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      className="flex items-center gap-2 text-[11px] font-bold text-green-600 px-4 py-2 bg-green-50 border border-green-100 rounded-xl"
+                    >
+                      <Check size={14} />
+                      CONTENT VERIFIED: EVERYTHING TRANSLATED
+                    </motion.div>
+                  )}
+                  {status === 'error' && (
+                    <motion.div
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      className="flex items-center gap-2 text-[11px] font-bold text-amber-600 px-4 py-2 bg-amber-50 border border-amber-100 rounded-xl"
+                    >
+                      <AlertCircle size={14} />
+                      UNSUPPORTED: {unsupportedChars.map(c => `'${c}'`).join(', ')}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </section>
 
