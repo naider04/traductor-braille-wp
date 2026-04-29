@@ -1,0 +1,6 @@
+{
+  "name": "Braille Mirror Translator",
+  "description": "A specialized tool to translate text into Braille and mirrored Braille with precise column flipping and multi-line support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
